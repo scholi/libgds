@@ -1,0 +1,9 @@
+#!/usr/bin/python
+
+import gds,sys,os
+
+if len(sys.argv)>1:
+	f=sys.argv[1]
+	g=gds.GDSII(f+".txt")
+	g.open(f)
+	g.close()

@@ -1,0 +1,160 @@
+\documentclass{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage{fullpage}
+\usepackage{listings}
+\usepackage{txfonts}
+\usepackage{fourier-orns}
+\usepackage{fancybox}
+\usepackage{array}
+\usepackage{textcomp}
+
+\newcommand{\cmd}[1]{\texttt{#1}}
+\newcommand{\var}[1]{\textit{#1}}
+\newcommand{\war}[2][14.5]{\ovalbox{
+\begin{tabular}{m{1cm}m{#1cm}}
+\Huge\danger & #2
+\end{tabular}
+}}
+
+\author{Olivier Scholder}
+\title{Manual of the GDS.py Library}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\section{Installation}
+The installation is easy, just copy the script wherever you want and assign the environement variable PYTHONPATH to the directory path where you put the file.
+\paragraph{ToDo}$\frac{}{}$\\
+\lstset{language=bash}
+\begin{lstlisting}[frame=single]
+cd
+mkdir scripts
+cp PATH_TO_GDS/gds.py scripts/
+echo 'export PYTHONPATH="~/scripts"' >> ~/.bashrc
+\end{lstlisting}
+
+\section{General options}
+All the units are set in nm if not specified.
+\begin{description}
+\item[layer] On which layer you want your line
+\item[width] The line width. For Raith is normaly set to 0. It's the dose which will actually define your width
+\item[dose] The dose set the DATATYPE variable which is interpreted by Raith as the dose.
+\item[loop] Tell how many time in a row the object should be looped. If set to \var{None} (which is default), uses the internal \var{loops} variable.\\
+\war[13.5]{This function works only for FIB (Elphy Multibeam). This tag will be probably discarded by Raith150 II or other system, meaning that only a single loop will be performed.}
+\end{description}
+
+\section{Basic Functions}
+\subsection{First step}
+The very first step is to call the library:
+\lstset{language=python}
+\begin{lstlisting}[frame=single]
+#!/usr/bin/python
+
+import gds
+
+g=gds.GDSII()
+\end{lstlisting}
+This small piece of code will import you gds library and create a new GDSII object called g. This steps just prepare everything you need to write GDSII files. By calling \cmd{GDSII()} without argument, this will store all of your data in memory until you call the \cmd{save()} function. An alternative to save memory, as you are preparing large data, is to give in argument the file name of the gds you want to write into:
+\begin{lstlisting}[frame=single]
+#!/usr/bin/python
+
+import gds
+
+g=gds.GDSII("mygds.gds")
+
+# ...
+# Add structures ...
+# ...
+g.close()
+\end{lstlisting}
+Notice, that you need to close that file with the command \cmd{close()} with this direct writing method.
+\par\noindent
+\war{The reader should also be aware that this script never check if file already exists an will overwrite already existing files.}
+
+\subsection{Create new file}
+\paragraph{Headers}
+The GDSII object provides you the \cmd{new()} function which creates automatically the header of your GDS file. As argument new take the name of your library, which has mainly no importance. Normally \cmd{new()} should be called just after the GDSII object creation.
+\paragraph{Footers and writing file}
+In order to save your structure to a GDS file you should write the footers which are done automatically by calling the \cmd{endLib()} function. Once this step is done you can save your GDS file with the \cmd{write()} function. You have to specifiy the path of your gds as argument to the \cmd{write()} function.
+\paragraph{Simple Example}
+The following example will write a valid GDSII file containing no structures. It should be the basic of all your scripts.
+\begin{lstlisting}[frame=single]
+#!/usr/bin/python
+
+import gds
+
+g=gds.GDSII()
+g.new('EMPTY')
+g.endLib()
+g.write('empty.gds')
+\end{lstlisting}
+
+\section{Graphical Functions}
+Now let's see what we can do graphically with the GDSII files
+\subsection{Lines}
+\verb?addLine(pts, layer=0, width=0, dose=1, loop=None)?
+\begin{description}
+\item[pts] the points list. pts=[x1,y1,x2,y1,...,xn,yn]
+\end{description}
+
+\subsection{Circles and Arcs}
+\verb?addCircle(pos, radius, npts=10, layer=0, width=0, dose=1, A=0, B=360, loop=None)?
+\begin{description}
+\item[pos] The position of the center of the circle. \var{pos}=[x,y]
+\item[radius] The radius of the circle
+\item[npts] The circle is actually a regular polygon and npts specify the number of submits. So if \var{npts}=4, you will get a square.
+\item[A] The start angle
+\item[B] The end angle. So if \var{A}=0 and \var{B}=90, you will get the quarter of a circle
+\end{description}
+
+\subsection{Polygons}
+\verb?addPoly(pos, layer=0, dose=1, loop=None)?
+\begin{description}
+\item[pos] list of points. \var{pos}=[x1,y1,x2,y2,...,xn,yn]
+\end{description}
+
+\subsection{Rectangles}
+\verb?addRect(pos, layer=0, dose=1, CCW=False, loop=None)?
+\begin{description}
+\item[pos] \var{pos}=[xll,yll,width,height]
+\item[CCW] draw ClowckWise or CounterClockWise=?
+\end{description}
+
+\subsection{Text}
+\verb?addText(pos, txt, height=None, mag=22.22222, layer=0, width=0, angle=0, loop=None)?
+\begin{description}
+\item[pos] position of the text. \var{pos}=[x,y]. Normaly it's the middle point of the text.
+\item[txt] The text as string.
+\item[height] Set the text height. This option will compute automatically the corresponding magnification and will override the option mag.
+\item[mag] The magnification. A \var{mag} of 22.22222 will give a text of $1\,\hbox{\textmu}\rm{m}$ height. It's maybe better to use the height option.
+\item[angle] The rotation angle of the text.
+\end{description}
+
+\section{Dose and Loops}
+\subsection{Dose}
+
+
+\section{Examples}
+Examples are always much better than words.
+\begin{lstlisting}[breaklines=true,frame=single]
+#!/usr/bin/python
+
+import gds
+
+g=gds.GDSII()
+g.new('DEMO')
+g.newStr('Dipant')
+space=(1000,1000)
+for y in range(5):
+	for x in range(5):
+		g.addLine((x*space[0],y*space[1],x*space[0]+width,y*space[1]),dose=y*0.5+x*0.1)
+for y in range(5):
+	g.addText((-space[0],y*space[1]),str(y*0.5),height=500)
+for x in range(5):
+	g.addText((x*space[0],-space[1]),"+"+str(x*0.1),height=500)
+g.endStr()
+g.endLib()
+g.write('demo.gds')
+\end{lstlisting}
+\end{document}
