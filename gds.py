@@ -1,16 +1,16 @@
 #!/usr/bin/env python
 # *-* coding: utf-8 *-*
 
-# SVN FILE: $Id: gds.py 268 2012-09-04 07:55:49Z scholi $
+# SVN FILE: $Id: gds.py 298 2013-10-02 07:44:25Z scholi $
 #
 # Project Name : GDSII library
 #
 # Author: $Author: scholi $
 # Copyright: $Copyright$
-# Version: $Revision: 268 $
-# Last Revision: $Date: 2012-09-04 09:55:49 +0200 (mar 04 sep 2012) $
+# Version: $Revision: 298 $
+# Last Revision: $Date: 2013-10-02 09:44:25 +0200 (Wed, 02 Oct 2013) $
 # Modified by: $LastChangedBy: scholi $
-# Last Modified: $LastChangedDate: 2012-09-04 09:55:49 +0200 (mar 04 sep 2012) $
+# Last Modified: $LastChangedDate: 2013-10-02 09:44:25 +0200 (Wed, 02 Oct 2013) $
 
 import struct
 import sys
