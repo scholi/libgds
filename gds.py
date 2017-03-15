@@ -70,53 +70,54 @@ def gds2float(x):
 
 class GDSII:
 	def __init__(self,DirectWrite=False):
-		self.Type2={ '\x00': (0,''),
-			"\x01": (2,'H'),
-			"\x02": (2,'H'),
-			"\x03": (4,'i'),
-			"\x05": (8,'Q'),
-			"\x06": (-1,'s')}
+		self.Type2={
+			b'\x00': (0,''),
+			b'\x01': (2,'H'),
+			b'\x02': (2,'H'),
+			b'\x03': (4,'i'),
+			b'\x05': (8,'Q'),
+			b'\x06': (-1,'s')}
 		self.Type={
-			"\x00\x02":"HEADER",
-			"\x01\x02":"BGNLIB",
-			"\x02\x06":"LIBNAME",
-			"\x03\x05":"UNITS",
-			"\x04\x00":"ENDLIB",
-			"\x05\x02":"BGNSTR",
-			"\x06\x06":"STRNAME",
-			"\x07\x00":"ENDSTR",
-			"\x08\x00":"BOUNDARY",
-			"\x09\x00":"PATH",
-			"\x0A\x00":"SREF",
-			"\x0B\x00":"AREF",
-			"\x0C\x00":"TEXT",
-			"\x0D\x02":"LAYER",
-			"\x0E\x02":"DATATYPE",
-			"\x0F\x03":"WIDTH",
-			"\x10\x03":"XY",
-			"\x12\x06":"SNAME",
-			"\x13\x02":"COLROW",
-			"\x15\x00":"NODE",
-			"\x16\x02":"TEXTTYPE",
-			"\x17\x01":"PRESENTATION",
-			"\x19\x06":"ASCII STRING",
-			"\x1a\x01":"STRANS",
-			"\x1b\x05":"MAG",
-			"\x1c\x05":"ANGLE",
-			"\x1f\x06":"REFLIBS",
-			"\x20\x06":"FONTS",
-			"\x21\x02":"PATHTYPE",
-			"\x22\x02":"GENERATIONS",
-			"\x23\x06":"ATTRTABLE",
-			"\x26\x01":"ELFLAGS",
-			"\x2a\x02":"NODETYPE",
-			"\x2d\x00":"BOX",
-			"\x2e\x02":"BOXTYPE",
-			"\x2f\x03":"PLEX",
-			"\x36\x02":"FORMAT",
-			"\x37\x06":"MASK",
-			"\x38\x00":"ENDMASKS",
-			"\x58\x00":"FBMS"}
+			b'\x00\x02':'HEADER',
+			b'\x01\x02':'BGNLIB',
+			b'\x02\x06':'LIBNAME',
+			b'\x03\x05':'UNITS',
+			b'\x04\x00':'ENDLIB',
+			b'\x05\x02':'BGNSTR',
+			b'\x06\x06':'STRNAME',
+			b'\x07\x00':'ENDSTR',
+			b'\x08\x00':'BOUNDARY',
+			b'\x09\x00':'PATH',
+			b'\x0A\x00':'SREF',
+			b'\x0B\x00':'AREF',
+			b'\x0C\x00':'TEXT',
+			b'\x0D\x02':'LAYER',
+			b'\x0E\x02':'DATATYPE',
+			b'\x0F\x03':'WIDTH',
+			b'\x10\x03':'XY',
+			b'\x12\x06':'SNAME',
+			b'\x13\x02':'COLROW',
+			b'\x15\x00':'NODE',
+			b'\x16\x02':'TEXTTYPE',
+			b'\x17\x01':'PRESENTATION',
+			b'\x19\x06':'ASCII STRING',
+			b'\x1a\x01':'STRANS',
+			b'\x1b\x05':'MAG',
+			b'\x1c\x05':'ANGLE',
+			b'\x1f\x06':'REFLIBS',
+			b'\x20\x06':'FONTS',
+			b'\x21\x02':'PATHTYPE',
+			b'\x22\x02':'GENERATIONS',
+			b'\x23\x06':'ATTRTABLE',
+			b'\x26\x01':'ELFLAGS',
+			b'\x2a\x02':'NODETYPE',
+			b'\x2d\x00':'BOX',
+			b'\x2e\x02':'BOXTYPE',
+			b'\x2f\x03':'PLEX',
+			b'\x36\x02':'FORMAT',
+			b'\x37\x06':'MASK',
+			b'\x38\x00':'ENDMASKS',
+			b'\x58\x00':'FBMS'}
 		self.IType=dict((k,v) for v,k in self.Type.items())
 		self.structs=[]
 		self.minimax=[[0,0],[0,0]]
@@ -266,18 +267,17 @@ class GDSII:
 		# The type t, can be either a keyword defined my self.Type, or directly a 2-bytes binary
 		if p==None: p=[]
 		tt=self.getType(t)
-
 		if tt in self.Type:
 			t=self.Type[tt]
 		else:
 			t='UNKNOWKN'
-		fmt=self.Type2[tt[1]]
+		fmt=self.Type2[tt[1:2]]
 		if fmt[1]=='':
 			return struct.pack(">H2s",4,tt)
 		if fmt[0]==-1:
 			if type(p)==list or type(p)==tuple: p=p[0]
 			if p[-1]!='\x00' and len(p)%2==1: p+='\x00'
-			return struct.pack(">H2s%is"%(len(p)),4+len(p),tt,p)
+			return struct.pack(">H2s%is"%(len(p)),4+len(p),tt,p.encode('ascii'))
 		else:
 			if type(p)!=tuple and type(p)!=list: p=[p]
 			s=struct.pack(">H2s",4+len(p)*fmt[0],tt)
