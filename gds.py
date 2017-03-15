@@ -70,6 +70,13 @@ def gds2float(x):
 
 class GDSII:
 	def __init__(self,DirectWrite=False):
+		"""
+		Main class to create GDSII data
+		
+		Arguments:
+		----------
+		DirectWrite: The filename of the structure. If None, the data will be kept on memory until you writze them explicitely. Except for specific debuging, it is better to wrote the file directly
+		"""
 		self.Type2={
 			b'\x00': (0,''),
 			b'\x01': (2,'H'),
@@ -285,6 +292,7 @@ class GDSII:
 				if fmt[1]=='Q':
 					s+=float2gds(x)
 				else:
+					if fmt[1]=='i': x=int(x)
 					s+=struct.pack(">"+fmt[1],x)
 			return s
 	def doseEnc(self, dose):
@@ -368,8 +376,13 @@ class GDSII:
 		if b==-1: b=len(self.objs)
 		for x in self.objs[a:b]:
 			T=x['TYPE']
-			if T in self.Type: TT=self.Type[T]
-			else: TT="??? (%s)"%(binascii.hexlify(T))
+			if T in self.Type:
+				TT=self.Type[T]
+			else:
+				if type(T) is str:
+					T=T.encode('ascii')
+				b=binascii.hexlify(T)
+				TT="??? (%s)"%(b)
 			if TT in ['BOUNDARY','PATH','SREF','AREF','TEXT','NODE','BOX']:
 				print("[", TT, "]")
 			else:
@@ -422,7 +435,9 @@ class GDSII:
 			self.writeLoop(loop)
 		# No idea what it is, but Raith write them for each line!
 		# It doesn't work if this command is not set!
-		self.addObj('\x11\x00')
+		self.addObj(b'\x11\x00')
+		if self.ax is not None:
+			self.ax.plot(pts[::2],pts[1::2],'b')
 	def playMacro(self):
 		for x in self.macro:
 			self.addObj(x['TYPE'],x['PARAMS'])
@@ -439,6 +454,15 @@ class GDSII:
 				self.uvShift(x=space[0])
 			self.uvShift(x=-space[0]*N[0],y=space[1])
 		self.shift=currentShift
+			
+	def addFrame(self, x,y,w,h,width=0,layer=0,loop=None):
+		"""
+		add a non-filled rectangle. lower left corner at (x,y) width/height is w/h, width is the width/thickness of the line.
+		"""
+		if loop is None:
+			loop = self.loops
+		self.addLine([x,y,x+w,y,x+w,y+h,x,y+h,x,y],width=width,loop=loop,layer=layer)
+		
 	def addObj(self,t,p=[]):
 		if self.enabledMacro:
 			self.macro.append({'TYPE':t,'PARAMS':p})
@@ -467,13 +491,17 @@ class GDSII:
 		self.addObj('BGNLIB',[2010,1,1,0,0,0,2010,1,1,0,0,0])
 		self.addObj('LIBNAME',[name])
 		self.addObj('UNITS',[0.001,1e-09])
-	def newStr(self, name):
+	def newStr(self, name, ax = None):
 		self.shift=[0,0]
 		self.currentStructure=name
 		self.area[name]=[0,0,0,0]
-		self.StrPos[name]=self.f.tell()
+		if self.f is not None:
+			self.StrPos[name]=self.f.tell()
+		else:
+			self.StrPos[name]=None
 		self.addObj('BGNSTR',[2010,1,1,0,0,0,2010,1,1,0,0,0])
 		self.addObj('STRNAME',name)
+		self.ax = ax
 	def endStr(self):
 		self.addObj('ENDSTR')
 	def endLib(self):
@@ -487,12 +515,41 @@ class GDSII:
 		for i in range(npts+1):
 			x=pos[0]+radius*math.cos(A+(B-A)*i/npts)
 			y=pos[1]+radius*math.sin(A+(B-A)*i/npts)
-			coords+=[x,y]
+			coords+=[int(x),int(y)]
 		self.addLine(coords,dose=dose,width=width,layer=layer)
 		if loop>1:
 			self.writeLoop(loop)
+			
+	def addDisk(self, pos, radius, npts=10, layer=0, dose=1, A=0, B=360,loop=None):
+		"""
+		Create a filled circle_test
+		
+		Arguments:
+		----------
+		pos: a (x,y) tuple or list of the center of the circle
+		radius: the radius of the circle
+		npts: The doftware don't handle "circle", so the script will convert it in a npts-sided polygon. Increase the number for better smoothness
+		layer: The layer id of the structure
+		dose: the dose (default: 1)
+		A,B: angle of start and end for pacman-like circle
+		loop: The number of loop (only useful for FIB patterning, not for E-beam)
+		"""
+		if loop==None:
+			loop=self.loops
+		coords=[]
+		A*=math.pi/180
+		B*=math.pi/180
+		for i in range(npts+1):
+			x=pos[0]+radius*math.cos(A+(B-A)*i/npts)
+			y=pos[1]+radius*math.sin(A+(B-A)*i/npts)
+			coords+=[int(x),int(y)]
+		self.addPoly(coords,dose=dose,layer=layer)
+		if loop>1:
+			self.writeLoop(loop)
+			
 	def close(self):
 		self.f.close()
+		
 	def addPoly(self, pos, layer=0, dose=1,loop=None,fmode=None,dmode=None, adir=None):
 		if loop==None:
 			loop=self.loops
@@ -512,6 +569,10 @@ class GDSII:
 		if adir!=None:
 			self.writeAngleDir(adir)
 		self.addObj('\x11\x00')
+		if self.ax is not None:
+			from matplotlib.patches import Polygon
+			self.ax.add_patch(Polygon(list(zip(pos[::2],pos[1::2])),closed=True,fill=True,color='b'))
+		
 	def addRect(self, pos, layer=0, dose=1,CCW=False,loop=None):
 		if loop==None:
 			loop=self.loops
@@ -520,6 +581,7 @@ class GDSII:
 			self.addPoly([pos[0],pos[1],pos[0]+pos[2],pos[1],pos[0]+pos[2],pos[1]+pos[3],pos[0],pos[1]+pos[3],pos[0],pos[1]],dose=does,layer=layer,loop=loop)
 		else:
 			self.addPoly([pos[0],pos[1],pos[0],pos[1]+pos[3],pos[0]+pos[2],pos[1]+pos[3],pos[0]+pos[2],pos[1],pos[0],pos[1]],dose=dose,layer=layer,loop=loop)
+			
 	def addText(self, pos, txt, height=None, mag=22.22222, layer=0, width=0, dose=1,angle=0,loop=None, align='NW',custom=False, mirror=False):
 		# Custom Font
 		font={	'0':[[(0,0),(1,0),(1,2),(0,2),(0,0)]],
