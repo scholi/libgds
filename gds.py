@@ -502,6 +502,8 @@ class GDSII:
 		self.addObj('BGNSTR',[2010,1,1,0,0,0,2010,1,1,0,0,0])
 		self.addObj('STRNAME',name)
 		self.ax = ax
+		if ax is not None:
+			ax.set_title("Structure: "+name)
 	def endStr(self):
 		self.addObj('ENDSTR')
 	def endLib(self):
