@@ -437,7 +437,7 @@ class GDSII:
 		# It doesn't work if this command is not set!
 		self.addObj(b'\x11\x00')
 		if self.ax is not None:
-			self.ax.plot(pts[::2],pts[1::2],'b')
+			self.ax.plot(pts[::2],pts[1::2],'r-')
 	def playMacro(self):
 		for x in self.macro:
 			self.addObj(x['TYPE'],x['PARAMS'])
@@ -473,7 +473,7 @@ class GDSII:
 			tt=self.getType(t)
 			# \x10\x03 is the code for XY
 			if tt=='\x10\x03':
-				p=reduce(lambda x,y:x+y,map(lambda z: self.uv2xy(z),zip(p[::2],p[1::2])))
+				p=[self.uv2xy(z)[i] for i in range(2) for z in zip(p[::2],p[1::2])]
 				for i in range(len(p[::2])):
 					if p[::2][i]<self.area[self.currentStructure][0]: self.area[self.currentStructure][0]=p[::2][i]
 					if p[::2][i]>self.area[self.currentStructure][2]: self.area[self.currentStructure][2]=p[::2][i]
@@ -655,10 +655,7 @@ class GDSII:
 				self.writeLoop(loop)
 			self.addObj('\x11\x00')
 		else:
-			bckShift=self.shift
-			bckMatr=self.M
 			length=2*len(txt)-1
-			self.uvShift(x=pos[0],y=pos[1])
 			dx=length/2.0
 			dy=height/2.0
 			if 'W' in align:
@@ -669,12 +666,13 @@ class GDSII:
 				dy=0
 			elif 'S':
 				dy=-height
+			M=[[1,0],[0,1]]
 			if angle!=0:
-				self.uvRotate(angle)
+				M=[[math.cos(angle),math.sin(angle)],[-math.sin(angle),math.cos(angle)]]
 			if mirror:
-				self.uvMirror(x=True)
+				M=MatrMatrMul([[-1,0],[0, 1]],M)
 				dx-=length
-			self.uvScale(x=500*height,y=500*height)
+			ref=[pos[0]+dx,pos[1]+dy]
 			for x in enumerate(txt):
 				t='?'
 				if x[1] in font:
@@ -683,9 +681,11 @@ class GDSII:
 					if x[1].upper() in font:
 						t=x[1].upper()
 				for k in font[t]:
-					self.addLine(reduce(lambda a,b: list(a)+list(b), map(lambda z: (dx+z[0]+x[0]*2,dy+z[1]),k)),dose=dose,layer=layer,loop=loop,width=width)
-			self.M=bckMatr
-			self.shift=bckShift
+					pts=[]
+					for z in k:
+						v=MatrVectMul(M,[z[0]+2*x[0],z[1]])
+						pts+=[ref[0]+(v[0])*height,ref[1]+v[1]*height]
+					self.addLine(pts,dose=dose,layer=layer,loop=loop,width=width)
 			
 if __name__ == "__main__":
 	## Exemple. Do a grating
