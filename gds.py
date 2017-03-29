@@ -157,8 +157,10 @@ class GDSII:
 		self.enabledMacro=False
 		self.currentStructure=None
 		self.area={} # Store the boudary of the Structure
-		self.Area={} # Store the summed area of the polygons (weighted by the dose factor)
-		self.Length ={} # Store the summed Length of the lines (weighted by the dose factor)
+		self.Area={} # Store the summed area of the polygons
+		self.Length ={} # Store the summed Length of the lines
+		self.DoseArea={}
+		self.DoseLine={}
 		self.StrPos={}
 		if DirectWrite:
 			self.f=open(DirectWrite,"wb")
@@ -457,13 +459,13 @@ class GDSII:
 			self.uvShift(x=-space[0]*N[0],y=space[1])
 		self.shift=currentShift
 			
-	def addFrame(self, x,y,w,h,width=0,layer=0,loop=None):
+	def addFrame(self, x,y,w,h,width=0,dose=1,layer=0,loop=None):
 		"""
 		add a non-filled rectangle. lower left corner at (x,y) width/height is w/h, width is the width/thickness of the line.
 		"""
 		if loop is None:
 			loop = self.loops
-		self.addLine([x,y,x+w,y,x+w,y+h,x,y+h,x,y],width=width,loop=loop,layer=layer)
+		self.addLine([x,y,x+w,y,x+w,y+h,x,y+h,x,y],width=width,dose=dose,loop=loop,layer=layer)
 		
 	def encodeObj(self,t,p=[]):
 		# This function is private and is only used my addObj
@@ -514,13 +516,14 @@ class GDSII:
 					if p[::2][i]>self.area[self.currentStructure][2]: self.area[self.currentStructure][2]=p[::2][i]
 					if p[1::2][i]<self.area[self.currentStructure][1]: self.area[self.currentStructure][1]=p[1::2][i]
 					if p[1::2][i]>self.area[self.currentStructure][3]: self.area[self.currentStructure][3]=p[1::2][i]
-				if self.ax is not None:
-					from matplotlib.patches import Polygon
-					if area:
-						self.Area[self.currentStructure]+=1e-18*getArea(p)*dose
+				if area:
+					self.LastArea=1e-18*getArea(p)
+					if self.ax is not None:
+						from matplotlib.patches import Polygon
 						self.ax.add_patch(Polygon(list(zip(p[::2],p[1::2])),closed=True,fill=True,color='b'))
-					else:
-						self.Length[self.currentStructure]+=1e-9*getLength(p)*dose
+				else:
+					self.LastLength=1e-9*getLength(p)
+					if self.ax is not None:
 						self.ax.plot(p[::2],p[1::2],'r-')
 			if self.f != None:
 				self.f.write(self.encodeObj(tt,p))
@@ -535,6 +538,8 @@ class GDSII:
 		self.addObj('DATATYPE',self.doseEnc(dose))
 		self.addObj('WIDTH',width)
 		self.addObj('XY',pts,area=False)
+		self.Length[self.currentStructure]+=self.LastLength
+		self.DoseLine[self.currentStructure]+=self.LastLength*dose
 		if loop>1:
 			self.writeLoop(loop)
 		# No idea what it is, but Raith write them for each line!
@@ -551,6 +556,8 @@ class GDSII:
 		self.addObj('LAYER',layer)
 		self.addObj('DATATYPE',self.doseEnc(dose))
 		self.addObj('XY',pos,area=True)
+		self.Area[self.currentStructure]+=self.LastArea
+		self.DoseArea[self.currentStructure]+=self.LastArea*dose
 		if loop>1:
 			self.writeLoop(loop)
 		if fmode!=None:
@@ -567,7 +574,7 @@ class GDSII:
 	def millInfo(self, structure, BeamCurrent=3e-11, AreaDose=1, LineDose=1e-8):
 		Area   = self.Area[structure]
 		Length = self.Length[structure]
-		Dose   = Area*AreaDose + Length*LineDose
+		Dose   = self.DoseArea[structure]*AreaDose + self.DoseLine[structure]*LineDose
 		Time   = Dose / BeamCurrent
 		return dict(area=Area*1e12,length=Length*1e6,dose=Dose*1e9,time=Time)
 		
@@ -580,10 +587,13 @@ class GDSII:
 		
 	def newStr(self, name, ax = None):
 		self.shift=[0,0]
-		self.currentStructure=name
-		self.area[name]=[0,0,0,0]
-		self.Area[name]=0.0
-		self.Length[name]=0.0
+		self.M=[[1,0],[0,1]]
+		self.currentStructure = name
+		self.area[name] = [0,0,0,0]
+		self.Area[name]     = 0.0
+		self.DoseArea[name] = 0.0
+		self.DoseLine[name] = 0.0
+		self.Length[name]   = 0.0
 		if self.f is not None:
 			self.StrPos[name]=self.f.tell()
 		else:
@@ -724,7 +734,10 @@ class GDSII:
 				self.writeLoop(loop)
 			self.addObj(b'\x11\x00')
 		else:
+			bckShift = self.shift[:]
+			bckMatr = self.M[:]
 			length=2*len(txt)-1
+			self.uvShift(x=pos[0],y=pos[1])
 			dx=length/2.0
 			dy=height/2.0
 			if 'W' in align:
@@ -735,13 +748,12 @@ class GDSII:
 				dy=0
 			elif 'S':
 				dy=-height
-			M=[[1,0],[0,1]]
 			if angle!=0:
-				M=[[math.cos(angle),math.sin(angle)],[-math.sin(angle),math.cos(angle)]]
+				self.uvRotate(angle)
 			if mirror:
-				M=MatrMatrMul([[-1,0],[0, 1]],M)
+				self.uvMirror(x=True)
 				dx-=length
-			ref=[pos[0]+dx,pos[1]+dy]
+			self.uvScale(x=500*height,y=500*height)
 			for x in enumerate(txt):
 				t='?'
 				if x[1] in font:
@@ -750,8 +762,7 @@ class GDSII:
 					if x[1].upper() in font:
 						t=x[1].upper()
 				for k in font[t]:
-					pts=[]
-					for z in k:
-						v=MatrVectMul(M,[z[0]+2*x[0],z[1]])
-						pts+=[ref[0]+(v[0])*height,ref[1]+v[1]*height]
+					pts=[[dx+z[0]+x[0]*2,dy+z[1]][i] for z in k for i in range(2)]
 					self.addLine(pts,dose=dose,layer=layer,loop=loop,width=width)
+			self.shift = bckShift[:]
+			self.M = bckMatr[:]
