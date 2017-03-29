@@ -148,10 +148,10 @@ class GDSII:
 			b'\x58\x00':'FBMS'}
 		self.IType=dict((k,v) for v,k in self.Type.items())
 		self.structs=[]
-		self.minimax=[[0,0],[0,0]]
+		self.minimax=[[0.0,0.0],[0.0,0.0]]
 		self.objs=[]
-		self.M=[[1,0],[0,1]]
-		self.shift=[0,0]
+		self.M=[[1.0,0.0],[0.0,1.0]]
+		self.shift=[0.0,0.0]
 		self.loops=1
 		self.macro=[]
 		self.enabledMacro=False
@@ -164,8 +164,10 @@ class GDSII:
 			self.f=open(DirectWrite,"wb")
 		else:
 			self.f=None
+			
 	def writeLoop(self, loop):
 		self.addObj(b'\x63\x06',b'\xaa'+b'\x00'*7+struct.pack("<I",int(loop)))
+		
 	def writeDirMode(self, mode):
 		if mode in ['//','par','paral','parallel']:
 			mode=0
@@ -195,8 +197,10 @@ class GDSII:
 		if type(mode)==type(1):
 			if mode>=0 and mode <3:
 				self.addObj('b\x63\x06',b'\x9b'+b'\x00'*7+struct.pack("<I",int(mode)))
+				
 	def addPoint(self, pos, layer=0, dose=1):
 		self.addLine([pos[0],pos[1],pos[0],pos[1]],layer=layer,width=0,dose=dose)
+		
 	def addMarker(self, pos, size=10000, width=1000, dose=1, loop=None):
 		# pos is the position of the LL corner of the marker
 		# The marker is a cross (+) fitting in a (size x size) square.
@@ -216,6 +220,7 @@ class GDSII:
 			pos[0],pos[1]+b,
 			pos[0],pos[1]+a,
 			pos[0]+a,pos[1]+a],dose=dose,loop=loop)
+			
 	def addSRef(self,struct, pos=(0,0), mag=1, angle=0):
 		self.addObj('SREF')
 		self.addObj('SNAME',struct)
@@ -226,6 +231,7 @@ class GDSII:
 			A=[[math.cos(angle),-math.sin(angle)],[math.sin(angle),math.cos(angle)]]
 		self.addObj('XY',list(pos))
 		self.addObj(b'\x11\x00')
+		
 	def addFBMS(self, pos, dose=1, width=0, layer=0, curvature=[], head=(0,0,0,0)):
 		self.addObj('FBMS')
 		self.addObj('LAYER',layer)
@@ -262,21 +268,28 @@ class GDSII:
 		self.addObj('COLROW',array)
 		self.addObj('XY',list(pos)+lr+tl)
 		self.addObj(b'\x11\x00')
+		
 	def uvSetShift(self,x=None,y=None):
 		if x==None: x=self.shift[0]
 		if y==None: y=self.shift[1]
 		self.shift=[x,y]
+		
 	def uvResetM(self):
 		self.M=[[1,0],[0,1]]
+		
 	def uvShift(self,x=0,y=0):
 		self.shift=[self.shift[0]+x,self.shift[1]+y]
+		
 	def uvScale(self,x=1,y=1):
 		self.M=MatrMatrMul([[x,0],[0,y]],self.M)
+		
 	def uvRotate(self, alpha=0):
 		alpha*=math.pi/180
 		self.M=MatrMatrMul([[math.cos(alpha),math.sin(alpha)],[-math.sin(alpha),math.cos(alpha)]],self.M)
+		
 	def uvMirror(self, x=False, y=False):
 		self.M=MatrMatrMul([[ [1,-1][x],0],[0, [1,-1][y]]],self.M)
+		
 	def getType(self, t):
 		if t in self.Type.values():
 			for x in self.Type:
@@ -290,34 +303,7 @@ class GDSII:
 			v=MatrVectMul(self.M,v)
 		return [self.shift[0]+v[0],self.shift[1]+v[1]]
 
-	def encodeObj(self,t,p=[]):
-		# This function is private and is only used my addObj
-		# The user shouln't take care of this function
-		# The hacker should know that this function converts the object of type t with arguments p to the GDS binary format
-		# The type t, can be either a keyword defined my self.Type, or directly a 2-bytes binary
-		if p==None: p=[]
-		tt=self.getType(t)
-		if tt in self.Type:
-			t=self.Type[tt]
-		else:
-			t='UNKNOWKN'
-		fmt=self.Type2[tt[1:2]]
-		if fmt[1]=='':
-			return struct.pack(">H2s",4,tt)
-		if fmt[0]==-1:
-			if type(p)==list or type(p)==tuple: p=p[0]
-			if p[-1]!='\x00' and len(p)%2==1: p+='\x00'
-			return struct.pack(">H2s%is"%(len(p)),4+len(p),tt,p.encode('ascii'))
-		else:
-			if type(p)!=tuple and type(p)!=list: p=[p]
-			s=struct.pack(">H2s",4+len(p)*fmt[0],tt)
-			for x in p:
-				if fmt[1]=='Q':
-					s+=float2gds(x)
-				else:
-					if fmt[1]=='i': x=int(x)
-					s+=struct.pack(">"+fmt[1],x)
-			return s
+	
 	def doseEnc(self, dose):
 		if dose<=30:
 			return int(dose*1000)
@@ -395,6 +381,7 @@ class GDSII:
 					ff.write("\" />\n")
 				if lo in ['SREF','AREF']:
 					ff.write("<g transform=\"scale(1,-1)\"><text x=\"%i\" y=\"%i\" font-size=\"10000\">%s</text></g>\n"%(TXT[0],TXT[1],los))
+					
 	def show(self,a=0,b=-1):
 		if b==-1: b=len(self.objs)
 		for x in self.objs[a:b]:
@@ -410,6 +397,7 @@ class GDSII:
 				print("[", TT, "]")
 			else:
 				print("\t[",TT,"]", x['PARAMS'])
+				
 	def getLobjs(self,a=0,b=-1):
 		r=[]
 		co={}
@@ -435,41 +423,31 @@ class GDSII:
 			if s[-1]==b'\x00': s=s[:-1]
 			r.append(s)
 		return r
+		
 	def getstruct(self, s):
 		for i in self.structs:
 			ss=self.objs[i[0]+1]['PARAMS'][0]
 			if ss[-1]==b'\x00': ss=ss[:-1]
 			if ss==s:
 				return i
+				
 	def write(self,path):
 		f=open(path,"wb")
 		for x in self.objs:
 			 f.write(self.encodeObj(x['TYPE'],x['PARAMS']))
 		f.close()
-	def addLine(self,pts, layer=0, width=0, dose=1,loop=None):
-		if loop==None:
-			loop=self.loops
-		self.addObj('PATH')
-		self.addObj('LAYER',layer)
-		self.addObj('DATATYPE',self.doseEnc(dose))
-		self.addObj('WIDTH',width)
-		self.addObj('XY',pts)
-		self.Length[self.currentStructure]+=1e-9*getLength(pts)*dose
-		if loop>1:
-			self.writeLoop(loop)
-		# No idea what it is, but Raith write them for each line!
-		# It doesn't work if this command is not set!
-		self.addObj(b'\x11\x00')
-		if self.ax is not None:
-			self.ax.plot(pts[::2],pts[1::2],'r-')
+	
 	def playMacro(self):
 		for x in self.macro:
 			self.addObj(x['TYPE'],x['PARAMS'])
+			
 	def startMacro(self):
 		self.macro=[]
 		self.enabledMacro=True
+		
 	def stopMacro(self,type=None):
 		self.enabledMacro=False
+		
 	def MatrixMacro(self,space,N):
 		currentShift=self.shift
 		for y in range(N[1]):
@@ -487,7 +465,36 @@ class GDSII:
 			loop = self.loops
 		self.addLine([x,y,x+w,y,x+w,y+h,x,y+h,x,y],width=width,loop=loop,layer=layer)
 		
-	def addObj(self,t,p=[]):
+	def encodeObj(self,t,p=[]):
+		# This function is private and is only used my addObj
+		# The user shouln't take care of this function
+		# The hacker should know that this function converts the object of type t with arguments p to the GDS binary format
+		# The type t, can be either a keyword defined my self.Type, or directly a 2-bytes binary
+		if p==None: p=[]
+		tt=self.getType(t)
+		if tt in self.Type:
+			t=self.Type[tt]
+		else:
+			t='UNKNOWKN'
+		fmt=self.Type2[tt[1:2]]
+		if fmt[1]=='':
+			return struct.pack(">H2s",4,tt)
+		if fmt[0]==-1:
+			if type(p)==list or type(p)==tuple: p=p[0]
+			if p[-1]!='\x00' and len(p)%2==1: p+='\x00'
+			return struct.pack(">H2s%is"%(len(p)),4+len(p),tt,p.encode('ascii'))
+		else:
+			if type(p)!=tuple and type(p)!=list: p=[p]
+			s=struct.pack(">H2s",4+len(p)*fmt[0],tt)
+			for x in p:
+				if fmt[1]=='Q':
+					s+=float2gds(x)
+				else:
+					if fmt[1]=='i': x=int(x)
+					s+=struct.pack(">"+fmt[1],x)
+			return s
+			
+	def addObj(self,t,p=[],area=None):
 		if self.enabledMacro:
 			self.macro.append({'TYPE':t,'PARAMS':p})
 		else:
@@ -497,17 +504,63 @@ class GDSII:
 			tt=self.getType(t)
 			# \x10\x03 is the code for XY
 			if tt==b'\x10\x03':
-				p=[self.uv2xy(z)[i] for i in range(2) for z in zip(p[::2],p[1::2])]
+				pts=[]
+				for z in zip(p[::2],p[1::2]):
+					uv=self.uv2xy(z)
+					pts+=uv
+				p=pts
 				for i in range(len(p[::2])):
 					if p[::2][i]<self.area[self.currentStructure][0]: self.area[self.currentStructure][0]=p[::2][i]
 					if p[::2][i]>self.area[self.currentStructure][2]: self.area[self.currentStructure][2]=p[::2][i]
 					if p[1::2][i]<self.area[self.currentStructure][1]: self.area[self.currentStructure][1]=p[1::2][i]
 					if p[1::2][i]>self.area[self.currentStructure][3]: self.area[self.currentStructure][3]=p[1::2][i]
+				if self.ax is not None:
+					from matplotlib.patches import Polygon
+					if area:
+						self.Area[self.currentStructure]+=1e-18*getArea(p)*dose
+						self.ax.add_patch(Polygon(list(zip(p[::2],p[1::2])),closed=True,fill=True,color='b'))
+					else:
+						self.Length[self.currentStructure]+=1e-9*getLength(p)*dose
+						self.ax.plot(p[::2],p[1::2],'r-')
 			if self.f != None:
 				self.f.write(self.encodeObj(tt,p))
 			else:
 				self.objs.append({'TYPE':tt,'PARAMS':p})
 				
+	def addLine(self,pts, layer=0, width=0, dose=1,loop=None):
+		if loop==None:
+			loop=self.loops
+		self.addObj('PATH')
+		self.addObj('LAYER',layer)
+		self.addObj('DATATYPE',self.doseEnc(dose))
+		self.addObj('WIDTH',width)
+		self.addObj('XY',pts,area=False)
+		if loop>1:
+			self.writeLoop(loop)
+		# No idea what it is, but Raith write them for each line!
+		# It doesn't work if this command is not set!
+		self.addObj(b'\x11\x00')
+		
+	def addPoly(self, pos, layer=0, dose=1,loop=None,fmode=None,dmode=None, adir=None):
+		if loop==None:
+			loop=self.loops
+		if pos[-2]!=pos[0] or pos[-1]!=pos[1]:
+			pos+=pos[0:2]
+		# pos=[x1,y1,x2,y2,x3,y3,...,x1,y1]
+		self.addObj('BOUNDARY')
+		self.addObj('LAYER',layer)
+		self.addObj('DATATYPE',self.doseEnc(dose))
+		self.addObj('XY',pos,area=True)
+		if loop>1:
+			self.writeLoop(loop)
+		if fmode!=None:
+			self.writeFillMode(fmode)
+		if dmode!=None:
+			self.writeDirMode(dmode)
+		if adir!=None:
+			self.writeAngleDir(adir)
+		self.addObj(b'\x11\x00')
+
 	def getArea(self, st):
 		return self.area[st]
 		
@@ -524,6 +577,7 @@ class GDSII:
 		self.addObj('BGNLIB',[2010,1,1,0,0,0,2010,1,1,0,0,0])
 		self.addObj('LIBNAME',[name])
 		self.addObj('UNITS',[0.001,1e-09])
+		
 	def newStr(self, name, ax = None):
 		self.shift=[0,0]
 		self.currentStructure=name
@@ -539,10 +593,13 @@ class GDSII:
 		self.ax = ax
 		if ax is not None:
 			ax.set_title("Structure: "+name)
+			
 	def endStr(self):
 		self.addObj('ENDSTR')
+		
 	def endLib(self):
 		self.addObj('ENDLIB')
+		
 	def addCircle(self, pos, radius, npts=10, layer=0, width=0, dose=1, A=0, B=360,loop=None):
 		if loop==None:
 			loop=self.loops
@@ -586,30 +643,6 @@ class GDSII:
 			
 	def close(self):
 		self.f.close()
-		
-	def addPoly(self, pos, layer=0, dose=1,loop=None,fmode=None,dmode=None, adir=None):
-		if loop==None:
-			loop=self.loops
-		if pos[-2]!=pos[0] or pos[-1]!=pos[1]:
-			pos+=pos[0:2]
-		# pos=[x1,y1,x2,y2,x3,y3,...,x1,y1]
-		self.addObj('BOUNDARY')
-		self.addObj('LAYER',layer)
-		self.addObj('DATATYPE',self.doseEnc(dose))
-		self.addObj('XY',pos)
-		self.Area[self.currentStructure]+=1e-18*getArea(pos)*dose
-		if loop>1:
-			self.writeLoop(loop)
-		if fmode!=None:
-			self.writeFillMode(fmode)
-		if dmode!=None:
-			self.writeDirMode(dmode)
-		if adir!=None:
-			self.writeAngleDir(adir)
-		self.addObj(b'\x11\x00')
-		if self.ax is not None:
-			from matplotlib.patches import Polygon
-			self.ax.add_patch(Polygon(list(zip(pos[::2],pos[1::2])),closed=True,fill=True,color='b'))
 		
 	def addRect(self, pos, layer=0, dose=1,CCW=False,loop=None):
 		if loop==None:
