@@ -275,6 +275,14 @@ class GDSII:
 		if x==None: x=self.shift[0]
 		if y==None: y=self.shift[1]
 		self.shift=[x,y]
+	
+	def uvSave(self):
+		self.BckM = self.M[:]
+		self.BckShift = self.shift[:]
+		
+	def uvRestore(self):
+		self.M = self.BckM[:]
+		self.shift = self.BckShift[:]
 		
 	def uvResetM(self):
 		self.M=[[1,0],[0,1]]
