@@ -67,7 +67,28 @@ def gds2float(x):
 	f=(sgn)|(e<<52)|man
 	r=struct.unpack('>d',struct.pack('>Q',f))[0]
 	return r
+	
+def getArea(x,y=None):
+	if y is None:
+		y=[float(z) for z in x[1::2]]
+		x=[float(z) for z in x[::2]]
+	if x[-1]!=x[0] or y[-1]!=y[0]:
+		x.append(x[0])
+		y.append(y[0])
+	Area=0
+	for i in range(len(x)-1):
+		Area+=0.5*(x[i]*y[i+1]-x[i+1]*y[i])
+	return abs(Area)
 
+def getLength(x,y=None):
+	if y is None:
+		y=[float(z) for z in x[1::2]]
+		x=[float(z) for z in x[::2]]
+	length=0.0
+	for i in range(len(x)-1):
+		length+=math.sqrt((x[i+1]-x[i])**2+(y[i+1]-y[i])**2)
+	return length
+	
 class GDSII:
 	def __init__(self,DirectWrite=False):
 		"""
@@ -135,14 +156,16 @@ class GDSII:
 		self.macro=[]
 		self.enabledMacro=False
 		self.currentStructure=None
-		self.area={}
+		self.area={} # Store the boudary of the Structure
+		self.Area={} # Store the summed area of the polygons (weighted by the dose factor)
+		self.Length ={} # Store the summed Length of the lines (weighted by the dose factor)
 		self.StrPos={}
 		if DirectWrite:
 			self.f=open(DirectWrite,"wb")
 		else:
 			self.f=None
 	def writeLoop(self, loop):
-		self.addObj('\x63\x06','\xaa'+'\x00'*7+struct.pack("<I",int(loop)))
+		self.addObj(b'\x63\x06',b'\xaa'+b'\x00'*7+struct.pack("<I",int(loop)))
 	def writeDirMode(self, mode):
 		if mode in ['//','par','paral','parallel']:
 			mode=0
@@ -154,13 +177,13 @@ class GDSII:
 			mode=3
 		if type(mode)==type(1):
 			if mode>=0 and mode <4:
-				self.addObj('\x63\x06','\xd2'+'\x00'*7+struct.pack("<I",int(mode)))
+				self.addObj(b'\x63\x06',b'\xd2'+b'\x00'*7+struct.pack("<I",int(mode)))
 
 	def writeAngleDir(self, adir):
 		if adir<0:
 			adir=360+adir
 		if adir>=0 and adir<360:
-				self.addObj('\x63\x06','\xd4'+'\x00'*5+'\x01\x00'+struct.pack("<d",adir))
+				self.addObj(b'\x63\x06',b'\xd4'+b'\x00'*5+b'\x01\x00'+struct.pack("<d",adir))
 
 	def writeFillMode(self, mode):
 		if mode in [ "dir","directional"]:
@@ -171,7 +194,7 @@ class GDSII:
 			mode=2
 		if type(mode)==type(1):
 			if mode>=0 and mode <3:
-				self.addObj('\x63\x06','\x9b'+'\x00'*7+struct.pack("<I",int(mode)))
+				self.addObj('b\x63\x06',b'\x9b'+b'\x00'*7+struct.pack("<I",int(mode)))
 	def addPoint(self, pos, layer=0, dose=1):
 		self.addLine([pos[0],pos[1],pos[0],pos[1]],layer=layer,width=0,dose=dose)
 	def addMarker(self, pos, size=10000, width=1000, dose=1, loop=None):
@@ -202,7 +225,7 @@ class GDSII:
 			self.addObj('ANGLE',float(angle))
 			A=[[math.cos(angle),-math.sin(angle)],[math.sin(angle),math.cos(angle)]]
 		self.addObj('XY',list(pos))
-		self.addObj('\x11\x00')
+		self.addObj(b'\x11\x00')
 	def addFBMS(self, pos, dose=1, width=0, layer=0, curvature=[], head=(0,0,0,0)):
 		self.addObj('FBMS')
 		self.addObj('LAYER',layer)
@@ -222,7 +245,7 @@ class GDSII:
 			p+=pos[2*i:(2*i+2)]
 			p+=[curvature[i]]
 		self.addObj('XY',p)	
-		self.addObj('\x11\x00')
+		self.addObj(b'\x11\x00')
 			
 	def addARef(self, struct, pos=(0,0), mag=1, angle=0, array=(1,1),spacing=(5000,5000)):
 		self.addObj('AREF')
@@ -238,7 +261,7 @@ class GDSII:
 			tl=MatrVectMul(A,tl)
 		self.addObj('COLROW',array)
 		self.addObj('XY',list(pos)+lr+tl)
-		self.addObj('\x11\x00')
+		self.addObj(b'\x11\x00')
 	def uvSetShift(self,x=None,y=None):
 		if x==None: x=self.shift[0]
 		if y==None: y=self.shift[1]
@@ -350,7 +373,7 @@ class GDSII:
 #				else: TYPE="??? (%s)"%(binascii.hexlify(TYPE))
 			if TYPE=='STRNAME':
 				t=TXT[0]
-				if t[-1]=='\x00': t=t[:-1]
+				if t[-1]==b'\x00': t=t[:-1]
 				ff=open(path+"_"+t+".svg","w")
 				ff.write("<svg xmlns=\"http://www.w3.org/2000/svg\">\n")
 				ff.write("<g transform=\"scale(1,-1)\">\n")
@@ -361,7 +384,7 @@ class GDSII:
 				lo=TYPE
 			elif TYPE=='SNAME':
 				los=TXT[0]
-				if los[-1]=='\x00': los=los[:-1]
+				if los[-1]==b'\x00': los=los[:-1]
 			elif TYPE=='XY':
 				if lo in ['BOUNDARY','PATH']:
 					ff.write("<path d=\"M %i,%i L"%(TXT[0],TXT[1]))
@@ -409,13 +432,13 @@ class GDSII:
 		r=[]
 		for i in self.structs:
 			s=self.objs[i[0]+1]['PARAMS'][0]
-			if s[-1]=='\x00': s=s[:-1]
+			if s[-1]==b'\x00': s=s[:-1]
 			r.append(s)
 		return r
 	def getstruct(self, s):
 		for i in self.structs:
 			ss=self.objs[i[0]+1]['PARAMS'][0]
-			if ss[-1]=='\x00': ss=ss[:-1]
+			if ss[-1]==b'\x00': ss=ss[:-1]
 			if ss==s:
 				return i
 	def write(self,path):
@@ -431,6 +454,7 @@ class GDSII:
 		self.addObj('DATATYPE',self.doseEnc(dose))
 		self.addObj('WIDTH',width)
 		self.addObj('XY',pts)
+		self.Length[self.currentStructure]+=1e-9*getLength(pts)*dose
 		if loop>1:
 			self.writeLoop(loop)
 		# No idea what it is, but Raith write them for each line!
@@ -472,7 +496,7 @@ class GDSII:
 			if type(p)!=list and type(p)!=tuple: p=[p]
 			tt=self.getType(t)
 			# \x10\x03 is the code for XY
-			if tt=='\x10\x03':
+			if tt==b'\x10\x03':
 				p=[self.uv2xy(z)[i] for i in range(2) for z in zip(p[::2],p[1::2])]
 				for i in range(len(p[::2])):
 					if p[::2][i]<self.area[self.currentStructure][0]: self.area[self.currentStructure][0]=p[::2][i]
@@ -483,8 +507,17 @@ class GDSII:
 				self.f.write(self.encodeObj(tt,p))
 			else:
 				self.objs.append({'TYPE':tt,'PARAMS':p})
+				
 	def getArea(self, st):
 		return self.area[st]
+		
+	def millInfo(self, structure, BeamCurrent=3e-11, AreaDose=1, LineDose=1e-8):
+		Area   = self.Area[structure]
+		Length = self.Length[structure]
+		Dose   = Area*AreaDose + Length*LineDose
+		Time   = Dose / BeamCurrent
+		return dict(area=Area*1e12,length=Length*1e6,dose=Dose*1e9,time=Time)
+		
 	def new(self,name='TEST'):
 		self.objs=[]
 		self.addObj('HEADER',3)
@@ -495,6 +528,8 @@ class GDSII:
 		self.shift=[0,0]
 		self.currentStructure=name
 		self.area[name]=[0,0,0,0]
+		self.Area[name]=0.0
+		self.Length[name]=0.0
 		if self.f is not None:
 			self.StrPos[name]=self.f.tell()
 		else:
@@ -562,6 +597,7 @@ class GDSII:
 		self.addObj('LAYER',layer)
 		self.addObj('DATATYPE',self.doseEnc(dose))
 		self.addObj('XY',pos)
+		self.Area[self.currentStructure]+=1e-18*getArea(pos)*dose
 		if loop>1:
 			self.writeLoop(loop)
 		if fmode!=None:
@@ -570,7 +606,7 @@ class GDSII:
 			self.writeDirMode(dmode)
 		if adir!=None:
 			self.writeAngleDir(adir)
-		self.addObj('\x11\x00')
+		self.addObj(b'\x11\x00')
 		if self.ax is not None:
 			from matplotlib.patches import Polygon
 			self.ax.add_patch(Polygon(list(zip(pos[::2],pos[1::2])),closed=True,fill=True,color='b'))
@@ -653,7 +689,7 @@ class GDSII:
 			self.addObj('ASCII STRING',txt+'\x00')
 			if loop>1:
 				self.writeLoop(loop)
-			self.addObj('\x11\x00')
+			self.addObj(b'\x11\x00')
 		else:
 			length=2*len(txt)-1
 			dx=length/2.0
@@ -686,60 +722,3 @@ class GDSII:
 						v=MatrVectMul(M,[z[0]+2*x[0],z[1]])
 						pts+=[ref[0]+(v[0])*height,ref[1]+v[1]*height]
 					self.addLine(pts,dose=dose,layer=layer,loop=loop,width=width)
-			
-if __name__ == "__main__":
-	## Exemple. Do a grating
-	# create the GDSII object
-	g=GDSII()
-	if len(sys.argv)>1:
-		g.open(sys.argv[1])
-#		g.show()
-	else:
-		# add automatically the standard headers
-		g.new('TEST')
-		# add a new structure called "grating_test"
-		g.newStr('grating_test')
-		d=1
-		for x in range(0,20000,800):
-			# add one line with a dose d
-			g.addLine((x,0,x,10000),dose=d)
-			d+=1
-		# Finish the structure (obligatory)
-		g.endStr()
-		g.newStr('triangle')
-		g.addLine((0,0,100,0,0,100,0,0))
-		g.endStr()
-		g.newStr('circle_test')
-		# Different radius and segement per circle
-		g.addCircle((1000,1000),100,5)
-		g.addCircle((1000,1000),200,10)
-		g.addCircle((1000,1000),300,15)
-		g.addCircle((1000,1000),400,20)
-		g.addCircle((1000,1000),500,25)
-		# Pentagons with different start angle
-		g.addCircle((1000,2000),100,5)
-		g.addCircle((1000,2000),200,5,A=20,B=380)
-		g.addCircle((1000,2000),300,5,A=40,B=400)
-		g.addCircle((1000,2000),400,5,A=60,B=420)
-		# 1/4 circles
-		g.addCircle((1000,3000),500,A=90,B=0)
-		g.addCircle((2000,3000),500,A=180,B=360)
-		g.addCircle((3000,3000),500,A=180,B=0)
-		g.endStr()
-		g.newStr('Poly_test')
-		g.addRect((0,15000,1500,400))
-		g.addRect((1900,15000,1500,400))
-		g.addPoly((0,0,10000,0,10000,10000,0,10000,0,2000,2000,2000,2000,8000,8000,8000,8000,2000,0,2000,0,0))
-		g.endStr()
-		g.newStr('Text_test')
-		y=0
-		for m in enumerate([43.111,54.222,66.666,88.888]):
-			g.addText((0,y),"ABCDEF",mag=m[1])
-			y+=1000*(m[0]+1)
-		g.endStr()
-		# End the file (obligatory)
-		g.endLib()
-		# Display ASCII form of what was done (more for debuging purpose)
-		##g.show()
-		# Save the GDS to file
-		g.write('test.gds')
