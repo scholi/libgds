@@ -13,3 +13,7 @@ Note: (destination is not pwd, but the same as <file.gds>)
 
 ### plsmaker.py
 let you create a position list file for Raith patterning software
+
+
+### Documentation
+The documentation is found [here](https://github.com/scholi/libgds/blob/master/doc/gds.pdf) and additional informations are availabe in the [wiki](https://github.com/scholi/libgds/wiki)
